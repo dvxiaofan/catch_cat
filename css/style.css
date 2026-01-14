@@ -1,0 +1,232 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  background: #e8f4f8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.container {
+  text-align: center;
+  padding: 20px;
+}
+
+header h1 {
+  font-size: 120px;
+  color: #1a3a5c;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  font-size: 18px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.hint {
+  font-size: 14px;
+  color: #999;
+  margin-bottom: 30px;
+}
+
+/* 网格容器 */
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0 auto;
+  position: relative;
+  overflow: visible;
+}
+
+/* 每行 */
+.row {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+}
+
+/* 奇数行偏移（0-indexed，所以是偶数索引） */
+.row:nth-child(even) {
+  margin-left: 22px;
+}
+
+/* 格子 */
+.cell {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #a8d4f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.cell:hover:not(.blocked):not(.cat) {
+  transform: scale(1.1);
+  background: #8bc4e8;
+}
+
+.cell.blocked {
+  background: #1a3a5c;
+  cursor: not-allowed;
+}
+
+.cell.blocked:hover {
+  transform: none;
+}
+
+/* 小猫容器 - 绝对定位，可以在网格上自由移动 */
+#cat {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  pointer-events: none;
+  z-index: 100;
+  transition: left 0.15s ease-out, top 0.15s ease-out;
+}
+
+/* 小猫图标 - 坐姿剪影 */
+#cat::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23333333' d='M30,90 L30,65 C30,55 35,50 40,48 L40,42 C35,40 32,35 32,30 L32,10 L38,20 L42,15 L50,25 L58,15 L62,20 L68,10 L68,30 C68,35 65,40 60,42 L60,48 C65,50 70,55 70,65 L70,90 L60,90 L60,75 L55,75 L55,90 L45,90 L45,75 L40,75 L40,90 Z M40,32 A4,4 0 1,0 48,32 A4,4 0 1,0 40,32 M52,32 A4,4 0 1,0 60,32 A4,4 0 1,0 52,32 M46,40 L54,40 L50,45 Z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* 跳跃动画 */
+@keyframes catJump {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    transform: translateY(-12px) scale(1.05);
+  }
+  50% {
+    transform: translateY(-15px) scale(1.05);
+  }
+  80% {
+    transform: translateY(-5px) scale(1);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+#cat.jumping::after {
+  animation: catJump 0.3s ease-out;
+}
+
+/* 逃跑动画 - 连续跳跃离开画面 */
+@keyframes escapeUp {
+  0% { transform: translateY(0); opacity: 1; }
+  25% { transform: translateY(-20px); }
+  50% { transform: translateY(-10px); }
+  75% { transform: translateY(-40px); }
+  100% { transform: translateY(-150px); opacity: 0; }
+}
+
+@keyframes escapeDown {
+  0% { transform: translateY(0); opacity: 1; }
+  25% { transform: translateY(-15px); }
+  50% { transform: translateY(10px); }
+  75% { transform: translateY(-10px); }
+  100% { transform: translateY(150px); opacity: 0; }
+}
+
+@keyframes escapeLeft {
+  0% { transform: translate(0, 0); opacity: 1; }
+  25% { transform: translate(-15px, -15px); }
+  50% { transform: translate(-30px, 0); }
+  75% { transform: translate(-60px, -15px); }
+  100% { transform: translate(-150px, 0); opacity: 0; }
+}
+
+@keyframes escapeRight {
+  0% { transform: translate(0, 0); opacity: 1; }
+  25% { transform: translate(15px, -15px); }
+  50% { transform: translate(30px, 0); }
+  75% { transform: translate(60px, -15px); }
+  100% { transform: translate(150px, 0); opacity: 0; }
+}
+
+#cat.escape-up {
+  animation: escapeUp 0.6s ease-in forwards;
+}
+
+#cat.escape-down {
+  animation: escapeDown 0.6s ease-in forwards;
+}
+
+#cat.escape-left {
+  animation: escapeLeft 0.6s ease-in forwards;
+}
+
+#cat.escape-right {
+  animation: escapeRight 0.6s ease-in forwards;
+}
+
+/* 被困时的动画 */
+@keyframes trapped {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(5deg); }
+}
+
+#cat.trapped::after {
+  animation: trapped 0.5s ease-in-out 3;
+}
+
+/* 消息提示 */
+.message {
+  margin-top: 20px;
+  font-size: 24px;
+  font-weight: bold;
+  min-height: 36px;
+}
+
+.message.win {
+  color: #2ecc71;
+}
+
+.message.lose {
+  color: #e74c3c;
+}
+
+/* 重置按钮 */
+.reset-btn {
+  margin-top: 20px;
+  padding: 12px 30px;
+  font-size: 16px;
+  background: #1a3a5c;
+  color: white;
+  border: none;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reset-btn:hover {
+  background: #2a4a6c;
+  transform: scale(1.05);
+}
+
+.reset-btn:active {
+  transform: scale(0.98);
+}
