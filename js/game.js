@@ -1,121 +1,356 @@
+// Canvas 围住小猫游戏
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const messageEl = document.getElementById('message');
+const resetBtn = document.getElementById('resetBtn');
+
+// 游戏配置
+const config = {
+  gridSize: 9,
+  cellRadius: 20,
+  cellGap: 5,
+  colors: {
+    background: '#e8f4f8',
+    cell: '#a8d4f0',
+    cellHover: '#8bc4e8',
+    blocked: '#1a3a5c',
+    cat: '#333333'
+  }
+};
+
 // 游戏状态
 const gameState = {
-  gridSize: 9,
   cat: { row: 4, col: 4 },
   blocks: new Set(),
   gameOver: false,
   result: null,
-  isMoving: false
+  isMoving: false,
+  hoverCell: null,
+  cells: [] // 存储每个格子的坐标
 };
 
-// DOM 元素
-const gridEl = document.getElementById('grid');
-const messageEl = document.getElementById('message');
-const resetBtn = document.getElementById('resetBtn');
-let catEl = null;
+// 动画状态
+const animation = {
+  catX: 0,
+  catY: 0,
+  targetX: 0,
+  targetY: 0,
+  jumpPhase: 0, // 0: 静止, 1: 跳跃中
+  jumpProgress: 0,
+  escapePhase: 0, // 0: 无, 1: 逃跑中
+  escapeProgress: 0,
+  escapeDirection: null,
+  trappedPhase: 0, // 0: 无, 1: 被困动画
+  trappedProgress: 0
+};
+
+// 初始化 Canvas 尺寸
+function initCanvas() {
+  const totalWidth = config.gridSize * (config.cellRadius * 2 + config.cellGap) + config.cellRadius;
+  const totalHeight = config.gridSize * (config.cellRadius * 1.75 + config.cellGap) + config.cellRadius;
+
+  canvas.width = totalWidth;
+  canvas.height = totalHeight;
+
+  // 计算每个格子的中心坐标
+  gameState.cells = [];
+  for (let row = 0; row < config.gridSize; row++) {
+    const rowCells = [];
+    const offsetX = (row % 2 === 1) ? config.cellRadius + config.cellGap / 2 : 0;
+
+    for (let col = 0; col < config.gridSize; col++) {
+      const x = offsetX + config.cellRadius + col * (config.cellRadius * 2 + config.cellGap);
+      const y = config.cellRadius + row * (config.cellRadius * 1.75 + config.cellGap);
+      rowCells.push({ x, y });
+    }
+    gameState.cells.push(rowCells);
+  }
+}
 
 // 初始化游戏
 function init() {
+  // 先初始化 Canvas 和格子坐标
+  initCanvas();
+
   gameState.cat = { row: 4, col: 4 };
-  gameState.blocks = generateInitialBlocks(gameState.gridSize, gameState.cat, 8);
+  gameState.blocks = generateInitialBlocks(config.gridSize, gameState.cat, 8);
   gameState.gameOver = false;
   gameState.result = null;
   gameState.isMoving = false;
+  gameState.hoverCell = null;
+
+  // 重置动画状态
+  animation.jumpPhase = 0;
+  animation.escapePhase = 0;
+  animation.trappedPhase = 0;
+
+  // 设置猫咪初始位置
+  const catCell = gameState.cells[gameState.cat.row][gameState.cat.col];
+  animation.catX = catCell.x;
+  animation.catY = catCell.y;
+  animation.targetX = catCell.x;
+  animation.targetY = catCell.y;
 
   messageEl.textContent = '';
   messageEl.className = 'message';
-
-  createGrid();
-  createCat();
-  renderGrid();
 }
 
-// 创建网格 DOM
-function createGrid() {
-  gridEl.innerHTML = '';
+// 绘制单个格子
+function drawCell(x, y, isBlocked, isHovered) {
+  ctx.beginPath();
+  ctx.arc(x, y, config.cellRadius, 0, Math.PI * 2);
 
-  for (let row = 0; row < gameState.gridSize; row++) {
-    const rowEl = document.createElement('div');
-    rowEl.className = 'row';
+  if (isBlocked) {
+    ctx.fillStyle = config.colors.blocked;
+  } else if (isHovered) {
+    ctx.fillStyle = config.colors.cellHover;
+  } else {
+    ctx.fillStyle = config.colors.cell;
+  }
 
-    for (let col = 0; col < gameState.gridSize; col++) {
-      const cell = document.createElement('div');
-      cell.className = 'cell';
-      cell.dataset.row = row;
-      cell.dataset.col = col;
-      cell.addEventListener('click', () => handleClick(row, col));
-      rowEl.appendChild(cell);
+  ctx.fill();
+}
+
+// 绘制小猫（简单形状版本）
+function drawCat(x, y, scale = 1, rotation = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.scale(scale, scale);
+
+  const size = config.cellRadius * 0.8;
+
+  // 身体
+  ctx.fillStyle = config.colors.cat;
+  ctx.beginPath();
+  ctx.ellipse(0, size * 0.1, size * 0.5, size * 0.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 头
+  ctx.beginPath();
+  ctx.arc(0, -size * 0.5, size * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 耳朵
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.35, -size * 0.7);
+  ctx.lineTo(-size * 0.2, -size * 1.0);
+  ctx.lineTo(-size * 0.05, -size * 0.7);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(size * 0.35, -size * 0.7);
+  ctx.lineTo(size * 0.2, -size * 1.0);
+  ctx.lineTo(size * 0.05, -size * 0.7);
+  ctx.fill();
+
+  // 眼睛
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(-size * 0.15, -size * 0.55, size * 0.1, 0, Math.PI * 2);
+  ctx.arc(size * 0.15, -size * 0.55, size * 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 瞳孔
+  ctx.fillStyle = '#000000';
+  ctx.beginPath();
+  ctx.arc(-size * 0.15, -size * 0.55, size * 0.05, 0, Math.PI * 2);
+  ctx.arc(size * 0.15, -size * 0.55, size * 0.05, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 鼻子
+  ctx.fillStyle = '#ff9999';
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.4);
+  ctx.lineTo(-size * 0.06, -size * 0.32);
+  ctx.lineTo(size * 0.06, -size * 0.32);
+  ctx.fill();
+
+  // 尾巴
+  ctx.strokeStyle = config.colors.cat;
+  ctx.lineWidth = size * 0.15;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(size * 0.3, size * 0.4);
+  ctx.quadraticCurveTo(size * 0.8, size * 0.2, size * 0.6, -size * 0.2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// 绘制整个游戏画面
+function draw() {
+  // 清空画布
+  ctx.fillStyle = config.colors.background;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 绘制所有格子
+  for (let row = 0; row < config.gridSize; row++) {
+    for (let col = 0; col < config.gridSize; col++) {
+      const cell = gameState.cells[row][col];
+      const key = `${row},${col}`;
+      const isBlocked = gameState.blocks.has(key);
+      const isHovered = gameState.hoverCell &&
+                        gameState.hoverCell.row === row &&
+                        gameState.hoverCell.col === col &&
+                        !isBlocked &&
+                        !(row === gameState.cat.row && col === gameState.cat.col);
+
+      drawCell(cell.x, cell.y, isBlocked, isHovered);
+    }
+  }
+
+  // 绘制小猫（带动画效果）
+  let catX = animation.catX;
+  let catY = animation.catY;
+  let scale = 1;
+  let rotation = 0;
+
+  // 跳跃动画
+  if (animation.jumpPhase === 1) {
+    const t = animation.jumpProgress;
+    // 从起点到终点的插值
+    catX = animation.catX + (animation.targetX - animation.catX) * t;
+    catY = animation.catY + (animation.targetY - animation.catY) * t;
+    // 抛物线跳跃高度
+    const jumpHeight = Math.sin(t * Math.PI) * 15;
+    catY -= jumpHeight;
+    // 跳跃时微微放大
+    scale = 1 + Math.sin(t * Math.PI) * 0.1;
+  }
+
+  // 逃跑动画
+  if (animation.escapePhase === 1) {
+    const t = animation.escapeProgress;
+    let dx = 0, dy = 0;
+
+    switch (animation.escapeDirection) {
+      case 'up':
+        dy = -150 * t;
+        break;
+      case 'down':
+        dy = 150 * t;
+        break;
+      case 'left':
+        dx = -150 * t;
+        break;
+      case 'right':
+        dx = 150 * t;
+        break;
     }
 
-    gridEl.appendChild(rowEl);
+    // 跳跃式逃跑
+    const jumpOffset = Math.sin(t * Math.PI * 3) * 10 * (1 - t);
+    catX += dx;
+    catY += dy - jumpOffset;
+    scale = 1 - t * 0.3; // 逐渐变小
+  }
+
+  // 被困动画
+  if (animation.trappedPhase === 1) {
+    rotation = Math.sin(animation.trappedProgress * Math.PI * 6) * 0.15;
+  }
+
+  // 只在未完全逃跑时绘制猫咪
+  if (animation.escapePhase !== 1 || animation.escapeProgress < 1) {
+    drawCat(catX, catY, scale, rotation);
   }
 }
 
-// 创建小猫元素
-function createCat() {
-  // 移除旧的猫咪元素
-  if (catEl) {
-    catEl.remove();
-  }
+// 动画循环
+function gameLoop() {
+  // 更新跳跃动画
+  if (animation.jumpPhase === 1) {
+    animation.jumpProgress += 0.08;
+    if (animation.jumpProgress >= 1) {
+      animation.jumpProgress = 1;
+      animation.jumpPhase = 0;
+      animation.catX = animation.targetX;
+      animation.catY = animation.targetY;
 
-  catEl = document.createElement('div');
-  catEl.id = 'cat';
-  gridEl.appendChild(catEl);
-
-  // 设置初始位置
-  updateCatPosition(false);
-}
-
-// 获取格子的中心位置
-function getCellCenter(row, col) {
-  const cell = gridEl.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
-  if (!cell) return { x: 0, y: 0 };
-
-  const gridRect = gridEl.getBoundingClientRect();
-  const cellRect = cell.getBoundingClientRect();
-
-  return {
-    x: cellRect.left - gridRect.left + cellRect.width / 2 - 16,
-    y: cellRect.top - gridRect.top + cellRect.height / 2 - 16
-  };
-}
-
-// 更新猫咪位置
-function updateCatPosition(animate = true) {
-  const pos = getCellCenter(gameState.cat.row, gameState.cat.col);
-
-  if (animate) {
-    catEl.classList.add('jumping');
-    setTimeout(() => {
-      catEl.classList.remove('jumping');
-    }, 300);
-  }
-
-  catEl.style.left = pos.x + 'px';
-  catEl.style.top = pos.y + 'px';
-}
-
-// 渲染网格状态
-function renderGrid() {
-  const cells = gridEl.querySelectorAll('.cell');
-
-  cells.forEach(cell => {
-    const row = parseInt(cell.dataset.row);
-    const col = parseInt(cell.dataset.col);
-    const key = `${row},${col}`;
-
-    cell.classList.remove('blocked');
-
-    if (gameState.blocks.has(key)) {
-      cell.classList.add('blocked');
+      // 检查是否逃跑
+      if (gameState.gameOver && gameState.result === 'lose') {
+        startEscapeAnimation();
+      } else {
+        gameState.isMoving = false;
+      }
     }
-  });
+  }
+
+  // 更新逃跑动画
+  if (animation.escapePhase === 1) {
+    animation.escapeProgress += 0.025;
+    if (animation.escapeProgress >= 1) {
+      animation.escapeProgress = 1;
+      animation.escapePhase = 0;
+      gameState.isMoving = false;
+      showMessage('小猫逃跑了！', 'lose');
+    }
+  }
+
+  // 更新被困动画
+  if (animation.trappedPhase === 1) {
+    animation.trappedProgress += 0.05;
+    if (animation.trappedProgress >= 1) {
+      animation.trappedProgress = 0;
+      animation.trappedPhase = 0;
+      showMessage('你赢了！成功围住小猫！', 'win');
+    }
+  }
+
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// 开始逃跑动画
+function startEscapeAnimation() {
+  const { row, col } = gameState.cat;
+  const gridSize = config.gridSize;
+
+  if (row === 0) {
+    animation.escapeDirection = 'up';
+  } else if (row === gridSize - 1) {
+    animation.escapeDirection = 'down';
+  } else if (col === 0) {
+    animation.escapeDirection = 'left';
+  } else {
+    animation.escapeDirection = 'right';
+  }
+
+  animation.escapePhase = 1;
+  animation.escapeProgress = 0;
+}
+
+// 获取点击的格子
+function getCellFromPoint(x, y) {
+  for (let row = 0; row < config.gridSize; row++) {
+    for (let col = 0; col < config.gridSize; col++) {
+      const cell = gameState.cells[row][col];
+      const dx = x - cell.x;
+      const dy = y - cell.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist <= config.cellRadius) {
+        return { row, col };
+      }
+    }
+  }
+  return null;
 }
 
 // 处理点击事件
-function handleClick(row, col) {
+function handleClick(e) {
   if (gameState.gameOver || gameState.isMoving) return;
 
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  const clicked = getCellFromPoint(x, y);
+  if (!clicked) return;
+
+  const { row, col } = clicked;
   const key = `${row},${col}`;
 
   // 不能点击已有障碍物或小猫位置
@@ -124,18 +359,31 @@ function handleClick(row, col) {
 
   // 放置障碍物
   gameState.blocks.add(key);
-  renderGrid();
 
   // 小猫移动
   gameState.isMoving = true;
   setTimeout(() => {
     moveCat();
-  }, 150);
+  }, 100);
+}
+
+// 处理鼠标移动
+function handleMouseMove(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  gameState.hoverCell = getCellFromPoint(x, y);
+}
+
+// 处理鼠标离开
+function handleMouseLeave() {
+  gameState.hoverCell = null;
 }
 
 // 移动小猫
 function moveCat() {
-  const bestMove = findBestMove(gameState.cat, gameState.blocks, gameState.gridSize);
+  const bestMove = findBestMove(gameState.cat, gameState.blocks, config.gridSize);
 
   if (bestMove === null) {
     // 无路可逃，玩家获胜
@@ -143,56 +391,27 @@ function moveCat() {
     gameState.result = 'win';
     gameState.isMoving = false;
 
-    // 被困动画
-    catEl.classList.add('trapped');
-    setTimeout(() => {
-      showMessage('你赢了！成功围住小猫！', 'win');
-    }, 500);
+    // 播放被困动画
+    animation.trappedPhase = 1;
+    animation.trappedProgress = 0;
     return;
   }
 
-  // 移动小猫
+  // 开始跳跃动画
+  const targetCell = gameState.cells[bestMove.row][bestMove.col];
+  animation.targetX = targetCell.x;
+  animation.targetY = targetCell.y;
+  animation.jumpPhase = 1;
+  animation.jumpProgress = 0;
+
+  // 更新游戏状态
   gameState.cat = bestMove;
-  updateCatPosition(true);
 
   // 检查是否到达边界
-  if (isEdge(gameState.cat, gameState.gridSize)) {
+  if (isEdge(gameState.cat, config.gridSize)) {
     gameState.gameOver = true;
     gameState.result = 'lose';
-
-    // 延迟一点执行逃跑动画，让跳跃动画先完成
-    setTimeout(() => {
-      playCatEscapeAnimation();
-    }, 200);
-  } else {
-    gameState.isMoving = false;
   }
-}
-
-// 播放小猫逃跑动画
-function playCatEscapeAnimation() {
-  const { row, col } = gameState.cat;
-  const gridSize = gameState.gridSize;
-
-  // 根据逃跑方向选择动画
-  let escapeClass = 'escape-right';
-
-  if (row === 0) {
-    escapeClass = 'escape-up';
-  } else if (row === gridSize - 1) {
-    escapeClass = 'escape-down';
-  } else if (col === 0) {
-    escapeClass = 'escape-left';
-  } else if (col === gridSize - 1) {
-    escapeClass = 'escape-right';
-  }
-
-  catEl.classList.add(escapeClass);
-
-  setTimeout(() => {
-    showMessage('小猫逃跑了！', 'lose');
-    gameState.isMoving = false;
-  }, 600);
 }
 
 // 显示消息
@@ -210,9 +429,7 @@ function generateInitialBlocks(gridSize, catPos, count) {
     const col = Math.floor(Math.random() * gridSize);
     const key = `${row},${col}`;
 
-    // 不能是小猫位置
     if (row !== catPos.row || col !== catPos.col) {
-      // 不能是小猫的直接邻居（给玩家一些挑战空间）
       const neighbors = getNeighbors(catPos.row, catPos.col, gridSize);
       const isNeighbor = neighbors.some(n => n.row === row && n.col === col);
 
@@ -259,12 +476,10 @@ function findBestMove(catPos, blocks, gridSize) {
   while (queue.length > 0) {
     const { pos, firstStep } = queue.shift();
 
-    // 到达边界，返回第一步
     if (isEdge(pos, gridSize) && firstStep !== null) {
       return firstStep;
     }
 
-    // 遍历邻居
     for (const neighbor of getNeighbors(pos.row, pos.col, gridSize)) {
       const key = `${neighbor.row},${neighbor.col}`;
 
@@ -278,19 +493,15 @@ function findBestMove(catPos, blocks, gridSize) {
     }
   }
 
-  // 无路可逃
   return null;
 }
 
-// 重置按钮事件
+// 事件监听
+canvas.addEventListener('click', handleClick);
+canvas.addEventListener('mousemove', handleMouseMove);
+canvas.addEventListener('mouseleave', handleMouseLeave);
 resetBtn.addEventListener('click', init);
-
-// 窗口大小改变时更新猫咪位置
-window.addEventListener('resize', () => {
-  if (catEl && !gameState.gameOver) {
-    updateCatPosition(false);
-  }
-});
 
 // 启动游戏
 init();
+gameLoop();
