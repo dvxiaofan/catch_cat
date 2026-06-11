@@ -12,6 +12,28 @@ const moveCountEl = document.getElementById('moveCount');
 const timerEl = document.getElementById('timer');
 const difficultyPicker = document.getElementById('difficultyPicker');
 
+// ===== 持久化工具（统一 localStorage try/catch 与 JSON 解析） =====
+const safeStorage = {
+  get(key, fallback = null) {
+    try { return localStorage.getItem(key) ?? fallback; }
+    catch (e) { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(key, String(value)); return true; }
+    catch (e) { return false; }
+  },
+  getJSON(key, fallback) {
+    try {
+      const v = localStorage.getItem(key);
+      return v == null ? fallback : JSON.parse(v);
+    } catch (e) { return fallback; }
+  },
+  setJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (e) { return false; }
+  }
+};
+
 // ===== 难度配置 =====
 const DIFFICULTIES = {
   easy:   { gridSize: 7,  initialBlocks: 4 },
@@ -41,11 +63,8 @@ const THEME_KEY = 'catch_cat_theme';
 let currentTheme = 'auto'; // 'auto' | 'light' | 'dark'
 
 function getSavedTheme() {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'dark' || saved === 'light' || saved === 'auto') return saved;
-  } catch (e) { /* localStorage 不可用时回退 auto */ }
-  return 'auto';
+  const saved = safeStorage.get(THEME_KEY);
+  return (saved === 'dark' || saved === 'light' || saved === 'auto') ? saved : 'auto';
 }
 
 function applyTheme(theme, refresh = true) {
@@ -53,7 +72,7 @@ function applyTheme(theme, refresh = true) {
   if (theme === 'light') document.body.classList.add('theme-light');
   else if (theme === 'dark') document.body.classList.add('theme-dark');
   currentTheme = theme;
-  try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* 忽略 */ }
+  safeStorage.set(THEME_KEY, theme);
   if (themeIcon) {
     themeIcon.textContent = theme === 'dark' ? '暗色' : theme === 'light' ? '亮色' : '自动';
   }
@@ -84,18 +103,14 @@ if (themeBtn) {
 
 // ===== 难度管理 =====
 function getSavedDifficulty() {
-  try {
-    const saved = localStorage.getItem(DIFFICULTY_KEY);
-    if (saved && DIFFICULTIES[saved]) return saved;
-  } catch (e) { /* localStorage 不可用时回退 normal */ }
-  return 'normal';
+  const saved = safeStorage.get(DIFFICULTY_KEY);
+  return (saved && DIFFICULTIES[saved]) ? saved : 'normal';
 }
 
 function applyDifficulty(level) {
   currentDifficulty = level;
   config.gridSize = DIFFICULTIES[level].gridSize;
-  try { localStorage.setItem(DIFFICULTY_KEY, level); } catch (e) { /* 忽略 */ }
-  // 同步按钮激活态
+  safeStorage.set(DIFFICULTY_KEY, level);
   if (difficultyPicker) {
     difficultyPicker.querySelectorAll('.difficulty-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.difficulty === level);
@@ -117,17 +132,12 @@ if (difficultyPicker) {
 // ===== 历史最佳记录（按难度分别保存） =====
 const BEST_KEY = 'catch_cat_best';
 function getBest(level) {
-  try {
-    const all = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
-    return all[level] || null; // {moves, time}
-  } catch (e) { return null; }
+  return safeStorage.getJSON(BEST_KEY, {})[level] || null; // {moves, time}
 }
 function setBest(level, moves, time) {
-  try {
-    const all = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
-    all[level] = { moves, time };
-    localStorage.setItem(BEST_KEY, JSON.stringify(all));
-  } catch (e) { /* 忽略 */ }
+  const all = safeStorage.getJSON(BEST_KEY, {});
+  all[level] = { moves, time };
+  safeStorage.setJSON(BEST_KEY, all);
 }
 function isBetter(level, moves, time) {
   const prev = getBest(level);
@@ -845,7 +855,7 @@ resetBtn.addEventListener('click', init);
 
 // ===== 音效系统（Web Audio API 合成，零文件） =====
 const SOUND_KEY = 'catch_cat_muted';
-let isMuted = localStorage.getItem(SOUND_KEY) === 'true';
+let isMuted = safeStorage.get(SOUND_KEY) === 'true';
 let audioCtx = null;
 
 function ensureAudio() {
@@ -900,7 +910,7 @@ if (soundBtn) {
   updateSoundIcon();
   soundBtn.addEventListener('click', () => {
     isMuted = !isMuted;
-    try { localStorage.setItem(SOUND_KEY, String(isMuted)); } catch (e) {}
+    safeStorage.set(SOUND_KEY, isMuted);
     updateSoundIcon();
   });
 }
