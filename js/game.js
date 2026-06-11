@@ -4,6 +4,8 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const messageEl = document.getElementById('message');
 const resetBtn = document.getElementById('resetBtn');
+const themeBtn = document.getElementById('themeToggle');
+const themeIcon = themeBtn ? themeBtn.querySelector('.theme-icon') : null;
 
 // 游戏配置
 const config = {
@@ -11,6 +13,7 @@ const config = {
   cellRadius: 20,
   cellGap: 5,
   colors: {
+    // 实际值由 refreshColors() 从 CSS 变量读取
     background: '#e8f4f8',
     cell: '#a8d4f0',
     cellHover: '#8bc4e8',
@@ -18,6 +21,50 @@ const config = {
     cat: '#333333'
   }
 };
+
+// ===== 主题管理（暗色模式） =====
+const THEME_KEY = 'catch_cat_theme';
+let currentTheme = 'auto'; // 'auto' | 'light' | 'dark'
+
+function getSavedTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'dark' || saved === 'light' || saved === 'auto') return saved;
+  } catch (e) { /* localStorage 不可用时回退 auto */ }
+  return 'auto';
+}
+
+function applyTheme(theme, refresh = true) {
+  document.body.classList.remove('theme-light', 'theme-dark');
+  if (theme === 'light') document.body.classList.add('theme-light');
+  else if (theme === 'dark') document.body.classList.add('theme-dark');
+  currentTheme = theme;
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* 忽略 */ }
+  if (themeIcon) {
+    themeIcon.textContent = theme === 'dark' ? '暗色' : theme === 'light' ? '亮色' : '自动';
+  }
+  if (refresh) refreshColors();
+}
+
+function refreshColors() {
+  const style = getComputedStyle(document.documentElement);
+  const v = (name) => style.getPropertyValue(name).trim();
+  config.colors.background = v('--bg');
+  config.colors.cell = v('--cell');
+  config.colors.cellHover = v('--cell-hover');
+  config.colors.blocked = v('--blocked');
+  config.colors.cat = v('--cat');
+}
+
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    // auto → dark → light → auto 循环
+    const next = currentTheme === 'auto' ? 'dark'
+               : currentTheme === 'dark' ? 'light'
+               : 'auto';
+    applyTheme(next);
+  });
+}
 
 // 游戏状态
 const gameState = {
@@ -637,6 +684,10 @@ canvas.addEventListener('click', handleClick);
 canvas.addEventListener('mousemove', handleMouseMove);
 canvas.addEventListener('mouseleave', handleMouseLeave);
 resetBtn.addEventListener('click', init);
+
+// 应用保存的主题并刷新 Canvas 配色
+applyTheme(getSavedTheme(), false);
+refreshColors();
 
 // 启动游戏
 init();

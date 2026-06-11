@@ -1,3 +1,77 @@
+/* ===== 主题变量 ===== */
+:root {
+  /* 亮色（默认） */
+  --bg: #e8f4f8;
+  --cell: #a8d4f0;
+  --cell-hover: #8bc4e8;
+  --blocked: #1a3a5c;
+  --cat: #333333;
+  --text-primary: #1a3a5c;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --button-bg: #1a3a5c;
+  --button-text: #ffffff;
+  --button-hover: #2a4a6c;
+  --win: #2ecc71;
+  --lose: #e74c3c;
+  --toggle-border: #999999;
+  color-scheme: light;
+}
+
+/* 暗色：跟随系统 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a2b3c;
+    --cell: #2c3e50;
+    --cell-hover: #3a4f63;
+    --blocked: #7fb8d8;
+    --cat: #888888;
+    --text-primary: #7fb8d8;
+    --text-secondary: #aab2bd;
+    --text-tertiary: #6c7a89;
+    --button-bg: #7fb8d8;
+    --button-text: #1a2b3c;
+    --button-hover: #8bc4e8;
+    --toggle-border: #6c7a89;
+    color-scheme: dark;
+  }
+}
+
+/* 暗色：手动覆盖（在亮色系统下强制暗色） */
+body.theme-dark {
+  --bg: #1a2b3c;
+  --cell: #2c3e50;
+  --cell-hover: #3a4f63;
+  --blocked: #7fb8d8;
+  --cat: #888888;
+  --text-primary: #7fb8d8;
+  --text-secondary: #aab2bd;
+  --text-tertiary: #6c7a89;
+  --button-bg: #7fb8d8;
+  --button-text: #1a2b3c;
+  --button-hover: #8bc4e8;
+  --toggle-border: #6c7a89;
+  color-scheme: dark;
+}
+
+/* 亮色：手动覆盖（在暗色系统下强制亮色） */
+body.theme-light {
+  --bg: #e8f4f8;
+  --cell: #a8d4f0;
+  --cell-hover: #8bc4e8;
+  --blocked: #1a3a5c;
+  --cat: #333333;
+  --text-primary: #1a3a5c;
+  --text-secondary: #666666;
+  --text-tertiary: #999999;
+  --button-bg: #1a3a5c;
+  --button-text: #ffffff;
+  --button-hover: #2a4a6c;
+  --toggle-border: #999999;
+  color-scheme: light;
+}
+
+/* ===== 基础样式 ===== */
 * {
   margin: 0;
   padding: 0;
@@ -6,12 +80,13 @@
 
 body {
   min-height: 100vh;
-  background: #e8f4f8;
+  background: var(--bg);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
+  transition: background 0.2s ease;
 }
 
 .container {
@@ -21,31 +96,66 @@ body {
 
 header h1 {
   font-size: 120px;
-  color: #1a3a5c;
+  color: var(--text-primary);
   line-height: 1;
   margin-bottom: 10px;
+  transition: color 0.2s ease;
 }
 
 .subtitle {
   font-size: 18px;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 8px;
+  transition: color 0.2s ease;
 }
 
 .hint {
   font-size: 14px;
-  color: #999;
+  color: var(--text-tertiary);
   margin-bottom: 30px;
+  transition: color 0.2s ease;
 }
 
-/* Canvas 样式 */
+/* ===== 主题切换按钮 ===== */
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  min-width: 56px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--toggle-border);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.theme-toggle:hover {
+  background: var(--text-tertiary);
+  color: var(--bg);
+  transform: scale(1.05);
+}
+
+.theme-toggle:active {
+  transform: scale(0.98);
+}
+
+/* ===== Canvas 样式 ===== */
 #gameCanvas {
   display: block;
   margin: 0 auto;
   cursor: pointer;
 }
 
-/* 消息提示 */
+/* ===== 消息提示 ===== */
 .message {
   margin-top: 20px;
   font-size: 24px;
@@ -54,28 +164,29 @@ header h1 {
 }
 
 .message.win {
-  color: #2ecc71;
+  color: var(--win);
 }
 
 .message.lose {
-  color: #e74c3c;
+  color: var(--lose);
 }
 
-/* 重置按钮 */
+/* ===== 重置按钮 ===== */
 .reset-btn {
   margin-top: 20px;
   padding: 12px 30px;
   font-size: 16px;
-  background: #1a3a5c;
-  color: white;
+  background: var(--button-bg);
+  color: var(--button-text);
   border: none;
   border-radius: 25px;
   cursor: pointer;
+  font-family: inherit;
   transition: all 0.2s ease;
 }
 
 .reset-btn:hover {
-  background: #2a4a6c;
+  background: var(--button-hover);
   transform: scale(1.05);
 }
 
