@@ -148,11 +148,44 @@ header h1 {
   transform: scale(0.98);
 }
 
+/* 声音开关按钮（叠在主题按钮下方） */
+.sound-toggle {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  min-width: 56px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--toggle-border);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.sound-toggle:hover {
+  background: var(--text-tertiary);
+  color: var(--bg);
+  transform: scale(1.05);
+}
+
+.sound-toggle:active {
+  transform: scale(0.98);
+}
+
 /* ===== Canvas 样式 ===== */
 #gameCanvas {
   display: block;
   margin: 0 auto;
   cursor: pointer;
+  touch-action: none; /* 阻止移动端双指缩放/滚动 */
 }
 
 /* ===== 消息提示 ===== */
@@ -192,4 +225,34 @@ header h1 {
 
 .reset-btn:active {
   transform: scale(0.98);
+}
+
+/* ===== 撤销按钮（次要风格） ===== */
+.undo-btn {
+  margin-top: 20px;
+  margin-right: 12px;
+  padding: 12px 30px;
+  font-size: 16px;
+  background: transparent;
+  color: var(--button-bg);
+  border: 2px solid var(--button-bg);
+  border-radius: 25px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.undo-btn:hover:not(:disabled) {
+  background: var(--button-bg);
+  color: var(--button-text);
+  transform: scale(1.05);
+}
+
+.undo-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.undo-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }

@@ -4,8 +4,11 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const messageEl = document.getElementById('message');
 const resetBtn = document.getElementById('resetBtn');
+const undoBtn = document.getElementById('undoBtn');
 const themeBtn = document.getElementById('themeToggle');
 const themeIcon = themeBtn ? themeBtn.querySelector('.theme-icon') : null;
+const soundBtn = document.getElementById('soundToggle');
+const soundIcon = soundBtn ? soundBtn.querySelector('.sound-icon') : null;
 
 // 游戏配置
 const config = {
@@ -76,7 +79,8 @@ const gameState = {
   result: null,
   isMoving: false,
   hoverCell: null,
-  cells: [] // 存储每个格子的坐标
+  cells: [], // 存储每个格子的坐标
+  history: [] // 撤销栈：每步玩家操作前的状态快照
 };
 
 // 动画状态
@@ -130,6 +134,7 @@ function init() {
   gameState.result = null;
   gameState.isMoving = false;
   gameState.hoverCell = null;
+  gameState.history = [];
 
   // 重置动画状态
   animation.jumpPhase = 0;
@@ -147,6 +152,7 @@ function init() {
 
   messageEl.textContent = '';
   messageEl.className = 'message';
+  updateUndoButton();
 }
 
 // 绘制单个格子
@@ -471,6 +477,8 @@ function gameLoop() {
       animation.escapePhase = 0;
       gameState.isMoving = false;
       showMessage('小猫逃跑了！', 'lose');
+      playLose();
+      updateUndoButton();
     }
   }
 
@@ -505,6 +513,7 @@ function startEscapeAnimation() {
 
   animation.escapePhase = 1;
   animation.escapeProgress = 0;
+  playEscape();
 }
 
 // 获取点击的格子
@@ -527,6 +536,8 @@ function getCellFromPoint(x, y) {
 // 处理点击事件
 function handleClick(e) {
   if (gameState.gameOver || gameState.isMoving) return;
+  // 首次交互：恢复 AudioContext（浏览器策略要求）
+  tryResumeAudio();
 
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
@@ -542,8 +553,13 @@ function handleClick(e) {
   if (gameState.blocks.has(key)) return;
   if (row === gameState.cat.row && col === gameState.cat.col) return;
 
+  // 放置前先快照当前状态（用于撤销）
+  gameState.history.push(snapshotState());
+
   // 放置障碍物
   gameState.blocks.add(key);
+  playPlace();
+  updateUndoButton();
 
   // 小猫移动
   gameState.isMoving = true;
@@ -579,6 +595,8 @@ function moveCat() {
     // 播放被困动画
     animation.trappedPhase = 1;
     animation.trappedProgress = 0;
+    playWin();
+    updateUndoButton();
     return;
   }
 
@@ -588,6 +606,7 @@ function moveCat() {
   animation.targetY = targetCell.y;
   animation.jumpPhase = 1;
   animation.jumpProgress = 0;
+  playJump();
 
   // 更新游戏状态
   gameState.cat = bestMove;
@@ -681,11 +700,115 @@ function findBestMove(catPos, blocks, gridSize) {
   return null;
 }
 
-// 事件监听
-canvas.addEventListener('click', handleClick);
-canvas.addEventListener('mousemove', handleMouseMove);
-canvas.addEventListener('mouseleave', handleMouseLeave);
+// 事件监听（pointer 事件，原生支持鼠标 + 触摸 + 手写笔）
+canvas.addEventListener('pointerdown', handleClick);
+canvas.addEventListener('pointermove', handleMouseMove);
+canvas.addEventListener('pointerleave', handleMouseLeave);
 resetBtn.addEventListener('click', init);
+
+// ===== 音效系统（Web Audio API 合成，零文件） =====
+const SOUND_KEY = 'catch_cat_muted';
+let isMuted = localStorage.getItem(SOUND_KEY) === 'true';
+let audioCtx = null;
+
+function ensureAudio() {
+  if (audioCtx) return audioCtx;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  audioCtx = new AC();
+  return audioCtx;
+}
+
+function tryResumeAudio() {
+  const ctx = ensureAudio();
+  if (ctx && ctx.state === 'suspended') ctx.resume();
+}
+
+function playTone({ freq, freqEnd, duration, type = 'sine', volume = 0.1 }) {
+  if (isMuted) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, ctx.currentTime);
+  if (freqEnd) {
+    osc.frequency.exponentialRampToValueAtTime(freqEnd, ctx.currentTime + duration);
+  }
+  gain.gain.setValueAtTime(volume, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + duration + 0.01);
+}
+
+function playPlace()   { playTone({ freq: 800,  duration: 0.05, type: 'square',   volume: 0.05 }); }
+function playJump()    { playTone({ freq: 300, freqEnd: 600, duration: 0.15, type: 'sine', volume: 0.08 }); }
+function playEscape()  { playTone({ freq: 600, freqEnd: 200, duration: 0.4,  type: 'triangle', volume: 0.1 }); }
+function playWin() {
+  // C5 E5 G5 上行三音
+  [523, 659, 784].forEach((freq, i) => {
+    setTimeout(() => playTone({ freq, duration: 0.15, type: 'sine', volume: 0.1 }), i * 100);
+  });
+}
+function playLose()  { playTone({ freq: 400, freqEnd: 150, duration: 0.6, type: 'triangle', volume: 0.1 }); }
+function playUndo()  { playTone({ freq: 600, freqEnd: 400, duration: 0.1, type: 'sine', volume: 0.05 }); }
+
+function updateSoundIcon() {
+  if (soundIcon) soundIcon.textContent = isMuted ? '静' : '声';
+}
+
+if (soundBtn) {
+  updateSoundIcon();
+  soundBtn.addEventListener('click', () => {
+    isMuted = !isMuted;
+    try { localStorage.setItem(SOUND_KEY, String(isMuted)); } catch (e) {}
+    updateSoundIcon();
+  });
+}
+
+// ===== 撤销系统 =====
+function snapshotState() {
+  return {
+    cat: { row: gameState.cat.row, col: gameState.cat.col },
+    blocks: new Set(gameState.blocks),
+    gameOver: gameState.gameOver,
+    result: gameState.result
+  };
+}
+
+function undoMove() {
+  if (gameState.history.length === 0) return;
+  if (gameState.isMoving || gameState.gameOver) return;
+  const prev = gameState.history.pop();
+  gameState.cat = prev.cat;
+  gameState.blocks = prev.blocks;
+  gameState.gameOver = prev.gameOver;
+  gameState.result = prev.result;
+  // 重置动画状态
+  animation.jumpPhase = 0;
+  animation.jumpProgress = 0;
+  animation.escapePhase = 0;
+  animation.escapeProgress = 0;
+  animation.trappedPhase = 0;
+  animation.trappedProgress = 0;
+  // 清除胜负消息
+  messageEl.textContent = '';
+  messageEl.className = 'message';
+  updateUndoButton();
+  playUndo();
+}
+
+function updateUndoButton() {
+  if (!undoBtn) return;
+  const canUndo = gameState.history.length > 0 && !gameState.isMoving && !gameState.gameOver;
+  undoBtn.disabled = !canUndo;
+}
+
+if (undoBtn) {
+  undoBtn.addEventListener('click', undoMove);
+}
 
 // 应用保存的主题并刷新 Canvas 配色
 applyTheme(getSavedTheme(), false);
