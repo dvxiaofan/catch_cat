@@ -8,7 +8,6 @@ const undoBtn = document.getElementById('undoBtn');
 const themeBtn = document.getElementById('themeToggle');
 const themeIcon = themeBtn ? themeBtn.querySelector('.theme-icon') : null;
 const soundBtn = document.getElementById('soundToggle');
-const soundIcon = soundBtn ? soundBtn.querySelector('.sound-icon') : null;
 
 // 游戏配置
 const config = {
@@ -756,7 +755,7 @@ function playLose()  { playTone({ freq: 400, freqEnd: 150, duration: 0.6, type: 
 function playUndo()  { playTone({ freq: 600, freqEnd: 400, duration: 0.1, type: 'sine', volume: 0.05 }); }
 
 function updateSoundIcon() {
-  if (soundIcon) soundIcon.textContent = isMuted ? '静' : '声';
+  if (soundBtn) soundBtn.classList.toggle('muted', isMuted);
 }
 
 if (soundBtn) {

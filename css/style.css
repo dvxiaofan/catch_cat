@@ -180,6 +180,11 @@ header h1 {
   transform: scale(0.98);
 }
 
+/* 声音图标切换：通过 .muted 类切换两个 SVG 的可见性 */
+.sound-toggle .sound-icon-off { display: none; }
+.sound-toggle.muted .sound-icon-on { display: none; }
+.sound-toggle.muted .sound-icon-off { display: block; }
+
 /* ===== Canvas 样式 ===== */
 #gameCanvas {
   display: block;
