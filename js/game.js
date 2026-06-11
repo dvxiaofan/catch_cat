@@ -8,10 +8,22 @@ const undoBtn = document.getElementById('undoBtn');
 const themeBtn = document.getElementById('themeToggle');
 const themeIcon = themeBtn ? themeBtn.querySelector('.theme-icon') : null;
 const soundBtn = document.getElementById('soundToggle');
+const moveCountEl = document.getElementById('moveCount');
+const timerEl = document.getElementById('timer');
+const difficultyPicker = document.getElementById('difficultyPicker');
+
+// ===== 难度配置 =====
+const DIFFICULTIES = {
+  easy:   { gridSize: 7,  initialBlocks: 4 },
+  normal: { gridSize: 9,  initialBlocks: 8 },
+  hard:   { gridSize: 11, initialBlocks: 12 }
+};
+const DIFFICULTY_KEY = 'catch_cat_difficulty';
+let currentDifficulty = 'normal';
 
 // 游戏配置
 const config = {
-  gridSize: 9,
+  gridSize: DIFFICULTIES.normal.gridSize,
   cellRadius: 20,
   cellGap: 5,
   colors: {
@@ -70,6 +82,76 @@ if (themeBtn) {
   });
 }
 
+// ===== 难度管理 =====
+function getSavedDifficulty() {
+  try {
+    const saved = localStorage.getItem(DIFFICULTY_KEY);
+    if (saved && DIFFICULTIES[saved]) return saved;
+  } catch (e) { /* localStorage 不可用时回退 normal */ }
+  return 'normal';
+}
+
+function applyDifficulty(level) {
+  currentDifficulty = level;
+  config.gridSize = DIFFICULTIES[level].gridSize;
+  try { localStorage.setItem(DIFFICULTY_KEY, level); } catch (e) { /* 忽略 */ }
+  // 同步按钮激活态
+  if (difficultyPicker) {
+    difficultyPicker.querySelectorAll('.difficulty-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.difficulty === level);
+    });
+  }
+}
+
+if (difficultyPicker) {
+  difficultyPicker.addEventListener('click', (e) => {
+    const btn = e.target.closest('.difficulty-btn');
+    if (!btn) return;
+    const level = btn.dataset.difficulty;
+    if (!DIFFICULTIES[level] || level === currentDifficulty) return;
+    applyDifficulty(level);
+    init(); // 重开一局
+  });
+}
+
+// ===== 历史最佳记录（按难度分别保存） =====
+const BEST_KEY = 'catch_cat_best';
+function getBest(level) {
+  try {
+    const all = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
+    return all[level] || null; // {moves, time}
+  } catch (e) { return null; }
+}
+function setBest(level, moves, time) {
+  try {
+    const all = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
+    all[level] = { moves, time };
+    localStorage.setItem(BEST_KEY, JSON.stringify(all));
+  } catch (e) { /* 忽略 */ }
+}
+function isBetter(level, moves, time) {
+  const prev = getBest(level);
+  if (!prev) return true;
+  return moves < prev.moves || (moves === prev.moves && time < prev.time);
+}
+
+// ===== HUD（步数 + 计时） =====
+function formatTime(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function updateHud() {
+  if (moveCountEl) moveCountEl.textContent = String(gameState.moveCount);
+  if (timerEl) {
+    const elapsed = gameState.finalTime > 0
+      ? gameState.finalTime
+      : (performance.now() - gameState.startTime) / 1000;
+    timerEl.textContent = formatTime(elapsed);
+  }
+}
+
 // 游戏状态
 const gameState = {
   cat: { row: 4, col: 4 },
@@ -79,7 +161,10 @@ const gameState = {
   isMoving: false,
   hoverCell: null,
   cells: [], // 存储每个格子的坐标
-  history: [] // 撤销栈：每步玩家操作前的状态快照
+  history: [], // 撤销栈：每步玩家操作前的状态快照
+  moveCount: 0,   // 玩家已下子步数
+  startTime: 0,   // 当前局开始时间（performance.now()）
+  finalTime: 0    // 结束时已用时（秒），用于显示与最佳记录比对
 };
 
 // 动画状态
@@ -127,13 +212,18 @@ function init() {
   // 先初始化 Canvas 和格子坐标
   initCanvas();
 
-  gameState.cat = { row: 4, col: 4 };
-  gameState.blocks = generateInitialBlocks(config.gridSize, gameState.cat, 8);
+  // 难度：猫居中、初始障碍数取自当前难度
+  const center = Math.floor(config.gridSize / 2);
+  gameState.cat = { row: center, col: center };
+  gameState.blocks = generateInitialBlocks(config.gridSize, gameState.cat, DIFFICULTIES[currentDifficulty].initialBlocks);
   gameState.gameOver = false;
   gameState.result = null;
   gameState.isMoving = false;
   gameState.hoverCell = null;
   gameState.history = [];
+  gameState.moveCount = 0;
+  gameState.startTime = performance.now();
+  gameState.finalTime = 0;
 
   // 重置动画状态
   animation.jumpPhase = 0;
@@ -149,8 +239,11 @@ function init() {
   animation.targetX = catCell.x;
   animation.targetY = catCell.y;
 
+  // 清空结束面板
   messageEl.textContent = '';
   messageEl.className = 'message';
+
+  updateHud();
   updateUndoButton();
 }
 
@@ -476,7 +569,7 @@ function gameLoop() {
       animation.escapeProgress = 1;
       animation.escapePhase = 0;
       gameState.isMoving = false;
-      showMessage('小猫逃跑了！', 'lose');
+      showEndMessage('lose');
       playLose();
       updateUndoButton();
     }
@@ -488,9 +581,12 @@ function gameLoop() {
     if (animation.trappedProgress >= 1) {
       animation.trappedProgress = 0;
       animation.trappedPhase = 0;
-      showMessage('你赢了！成功围住小猫！', 'win');
+      showEndMessage('win');
     }
   }
+
+  // 每帧刷新 HUD（计时需要持续走动）
+  updateHud();
 
   draw();
   requestAnimationFrame(gameLoop);
@@ -558,8 +654,10 @@ function handleClick(e) {
 
   // 放置障碍物
   gameState.blocks.add(key);
+  gameState.moveCount += 1;
   playPlace();
   updateUndoButton();
+  updateHud();
 
   // 小猫移动
   gameState.isMoving = true;
@@ -591,6 +689,7 @@ function moveCat() {
     gameState.gameOver = true;
     gameState.result = 'win';
     gameState.isMoving = false;
+    gameState.finalTime = (performance.now() - gameState.startTime) / 1000;
 
     // 播放被困动画
     animation.trappedPhase = 1;
@@ -615,13 +714,51 @@ function moveCat() {
   if (isEdge(gameState.cat, config.gridSize)) {
     gameState.gameOver = true;
     gameState.result = 'lose';
+    gameState.finalTime = (performance.now() - gameState.startTime) / 1000;
   }
 }
 
-// 显示消息
-function showMessage(text, type) {
-  messageEl.textContent = text;
-  messageEl.className = `message ${type}`;
+// 结束面板：胜负标题 + 本局统计 + 历史最佳 + 新纪录 + 再来一局
+function showEndMessage(result) {
+  const moves = gameState.moveCount;
+  const time = gameState.finalTime;
+  const isWin = result === 'win';
+  const title = isWin ? '你赢了！' : '小猫逃跑了';
+  const titleClass = isWin ? 'win' : 'lose';
+
+  // 判定是否新纪录并落盘（仅胜利局计最佳）
+  let best = getBest(currentDifficulty);
+  let isNew = false;
+  if (isWin) {
+    if (isBetter(currentDifficulty, moves, time)) {
+      setBest(currentDifficulty, moves, time);
+      isNew = true;
+      best = { moves, time };
+    }
+  }
+
+  // 拼 HTML
+  const bestText = best
+    ? `历史最佳：${best.moves} 步 · ${formatTime(best.time)}`
+    : '尚无最佳记录';
+  messageEl.className = `message ${titleClass}`;
+  messageEl.innerHTML = `
+    <div class="result">${title}</div>
+    <div class="result-stats">本局 ${moves} 步 · 用时 ${formatTime(time)}</div>
+    <div class="${isNew ? 'result-new' : 'result-best'}">${isNew ? '🎉 新纪录！' : bestText}</div>
+    <button class="play-again-btn" type="button">再来一局</button>
+  `;
+  const btn = messageEl.querySelector('.play-again-btn');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      // 重新开始
+      messageEl.textContent = '';
+      messageEl.className = 'message';
+      init();
+    });
+    // 自动聚焦，方便键盘直接回车
+    setTimeout(() => btn.focus(), 0);
+  }
 }
 
 // 生成初始障碍物
@@ -774,7 +911,8 @@ function snapshotState() {
     cat: { row: gameState.cat.row, col: gameState.cat.col },
     blocks: new Set(gameState.blocks),
     gameOver: gameState.gameOver,
-    result: gameState.result
+    result: gameState.result,
+    moveCount: gameState.moveCount
   };
 }
 
@@ -786,6 +924,9 @@ function undoMove() {
   gameState.blocks = prev.blocks;
   gameState.gameOver = prev.gameOver;
   gameState.result = prev.result;
+  gameState.moveCount = prev.moveCount;
+  // 撤销可能回退到游戏未结束态：清除 finalTime，恢复计时器
+  if (!gameState.gameOver) gameState.finalTime = 0;
   // 清除胜负消息
   messageEl.textContent = '';
   messageEl.className = 'message';
@@ -798,6 +939,7 @@ function undoMove() {
   animation.jumpProgress = 0;
   gameState.isMoving = true; // 阻止撤销期间新点击；gameLoop 跳完会自动设回 false
   updateUndoButton();
+  updateHud();
   playUndo();
 }
 
@@ -814,6 +956,9 @@ if (undoBtn) {
 // 应用保存的主题并刷新 Canvas 配色
 applyTheme(getSavedTheme(), false);
 refreshColors();
+
+// 应用保存的难度（按钮激活态 + config.gridSize）
+applyDifficulty(getSavedDifficulty());
 
 // 启动游戏
 init();
