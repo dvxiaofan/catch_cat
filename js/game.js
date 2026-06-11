@@ -47,7 +47,9 @@ function applyTheme(theme, refresh = true) {
 }
 
 function refreshColors() {
-  const style = getComputedStyle(document.documentElement);
+  // 必须从 body 读，因为 body.theme-light/dark 的 CSS 变量覆盖设在 body 上；
+  // 读 documentElement 拿不到 body 的覆盖（CSS 变量继承是父→子）
+  const style = getComputedStyle(document.body);
   const v = (name) => style.getPropertyValue(name).trim();
   config.colors.background = v('--bg');
   config.colors.cell = v('--cell');
