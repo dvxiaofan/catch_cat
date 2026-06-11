@@ -34,6 +34,12 @@ const safeStorage = {
   }
 };
 
+// 当前局已用时（秒）；未结束态从 startTime 推算
+const elapsedSeconds = () => (performance.now() - gameState.startTime) / 1000;
+
+// 清空结束面板（胜利/失败信息 + 撤销后也用）
+const clearMessage = () => { messageEl.textContent = ''; messageEl.className = 'message'; };
+
 // ===== 难度配置 =====
 const DIFFICULTIES = {
   easy:   { gridSize: 7,  initialBlocks: 4 },
@@ -164,7 +170,7 @@ function updateHud() {
 
 // 游戏状态
 const gameState = {
-  cat: { row: 4, col: 4 },
+  cat: { row: 0, col: 0 }, // 由 init() 用难度中心覆盖
   blocks: new Set(),
   gameOver: false,
   result: null,
@@ -250,8 +256,7 @@ function init() {
   animation.targetY = catCell.y;
 
   // 清空结束面板
-  messageEl.textContent = '';
-  messageEl.className = 'message';
+  clearMessage();
 
   updateHud();
   updateUndoButton();
@@ -699,7 +704,7 @@ function moveCat() {
     gameState.gameOver = true;
     gameState.result = 'win';
     gameState.isMoving = false;
-    gameState.finalTime = (performance.now() - gameState.startTime) / 1000;
+    gameState.finalTime = elapsedSeconds();
 
     // 播放被困动画
     animation.trappedPhase = 1;
@@ -724,7 +729,7 @@ function moveCat() {
   if (isEdge(gameState.cat, config.gridSize)) {
     gameState.gameOver = true;
     gameState.result = 'lose';
-    gameState.finalTime = (performance.now() - gameState.startTime) / 1000;
+    gameState.finalTime = elapsedSeconds();
   }
 }
 
@@ -733,42 +738,53 @@ function showEndMessage(result) {
   const moves = gameState.moveCount;
   const time = gameState.finalTime;
   const isWin = result === 'win';
-  const title = isWin ? '你赢了！' : '小猫逃跑了';
-  const titleClass = isWin ? 'win' : 'lose';
 
-  // 判定是否新纪录并落盘（仅胜利局计最佳）
-  let best = getBest(currentDifficulty);
+  // 一次解析出 best，再判定新纪录
+  const bestAll = safeStorage.getJSON(BEST_KEY, {});
+  const prevBest = bestAll[currentDifficulty] || null;
   let isNew = false;
-  if (isWin) {
-    if (isBetter(currentDifficulty, moves, time)) {
-      setBest(currentDifficulty, moves, time);
-      isNew = true;
-      best = { moves, time };
-    }
+  if (isWin && isBetter(currentDifficulty, moves, time)) {
+    bestAll[currentDifficulty] = { moves, time };
+    safeStorage.setJSON(BEST_KEY, bestAll);
+    isNew = true;
+  }
+  const best = isNew ? { moves, time } : prevBest;
+
+  // 用 createElement + textContent 构建（避免 innerHTML 注入风险）
+  clearMessage();
+  messageEl.className = `message ${isWin ? 'win' : 'lose'}`;
+
+  const titleEl = document.createElement('div');
+  titleEl.className = 'result';
+  titleEl.textContent = isWin ? '你赢了！' : '小猫逃跑了';
+
+  const statsEl = document.createElement('div');
+  statsEl.className = 'result-stats';
+  statsEl.textContent = `本局 ${moves} 步 · 用时 ${formatTime(time)}`;
+
+  const bestEl = document.createElement('div');
+  if (isNew) {
+    bestEl.className = 'result-new';
+    bestEl.textContent = '🎉 新纪录！';
+  } else {
+    bestEl.className = 'result-best';
+    bestEl.textContent = best
+      ? `历史最佳：${best.moves} 步 · ${formatTime(best.time)}`
+      : '尚无最佳记录';
   }
 
-  // 拼 HTML
-  const bestText = best
-    ? `历史最佳：${best.moves} 步 · ${formatTime(best.time)}`
-    : '尚无最佳记录';
-  messageEl.className = `message ${titleClass}`;
-  messageEl.innerHTML = `
-    <div class="result">${title}</div>
-    <div class="result-stats">本局 ${moves} 步 · 用时 ${formatTime(time)}</div>
-    <div class="${isNew ? 'result-new' : 'result-best'}">${isNew ? '🎉 新纪录！' : bestText}</div>
-    <button class="play-again-btn" type="button">再来一局</button>
-  `;
-  const btn = messageEl.querySelector('.play-again-btn');
-  if (btn) {
-    btn.addEventListener('click', () => {
-      // 重新开始
-      messageEl.textContent = '';
-      messageEl.className = 'message';
-      init();
-    });
-    // 自动聚焦，方便键盘直接回车
-    setTimeout(() => btn.focus(), 0);
-  }
+  const btn = document.createElement('button');
+  btn.className = 'play-again-btn';
+  btn.type = 'button';
+  btn.textContent = '再来一局';
+  btn.addEventListener('click', () => {
+    clearMessage();
+    init();
+  });
+
+  messageEl.append(titleEl, statsEl, bestEl, btn);
+  // 下一帧聚焦，键盘可直接回车
+  requestAnimationFrame(() => btn.focus());
 }
 
 // 生成初始障碍物
@@ -938,8 +954,7 @@ function undoMove() {
   // 撤销可能回退到游戏未结束态：清除 finalTime，恢复计时器
   if (!gameState.gameOver) gameState.finalTime = 0;
   // 清除胜负消息
-  messageEl.textContent = '';
-  messageEl.className = 'message';
+  clearMessage();
   // 启动反向跳跃动画：从当前视觉位置动画回到 prev.cat 所在格子
   // 不重置 jumpPhase，而是设成 1 让 gameLoop 自然播放，duration ≈ 0.28s
   const targetCell = gameState.cells[gameState.cat.row][gameState.cat.col];

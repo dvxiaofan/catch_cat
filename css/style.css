@@ -193,12 +193,6 @@ header h1 {
   touch-action: none; /* 阻止移动端双指缩放/滚动 */
 }
 
-/* ===== 消息提示（基础样式，详细布局见下方「结束面板」块） ===== */
-.message {
-  margin-top: 20px;
-  min-height: 36px;
-}
-
 /* ===== 重置按钮 ===== */
 .reset-btn {
   margin-top: 20px;
