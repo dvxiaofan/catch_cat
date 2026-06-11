@@ -42,7 +42,9 @@ const animation = {
   escapeProgress: 0,
   escapeDirection: null,
   trappedPhase: 0, // 0: 无, 1: 被困动画
-  trappedProgress: 0
+  trappedProgress: 0,
+  tailWag: 0, // 尾巴摆动相位
+  time: 0 // 全局时间
 };
 
 // 初始化 Canvas 尺寸
@@ -84,6 +86,8 @@ function init() {
   animation.jumpPhase = 0;
   animation.escapePhase = 0;
   animation.trappedPhase = 0;
+  animation.tailWag = 0;
+  animation.time = 0;
 
   // 设置猫咪初始位置
   const catCell = gameState.cells[gameState.cat.row][gameState.cat.col];
@@ -112,69 +116,195 @@ function drawCell(x, y, isBlocked, isHovered) {
   ctx.fill();
 }
 
-// 绘制小猫（简单形状版本）
-function drawCat(x, y, scale = 1, rotation = 0) {
+// 绘制小猫
+// pose: 'sit' = 蹲坐, 'jump' = 跳跃中
+// jumpProgress: 跳跃进度 0-1
+// tailWag: 尾巴摆动相位
+function drawCat(x, y, pose = 'sit', jumpProgress = 0, tailWag = 0) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(rotation);
-  ctx.scale(scale, scale);
 
-  const size = config.cellRadius * 0.8;
+  const size = config.cellRadius * 0.9;
 
-  // 身体
-  ctx.fillStyle = config.colors.cat;
-  ctx.beginPath();
-  ctx.ellipse(0, size * 0.1, size * 0.5, size * 0.6, 0, 0, Math.PI * 2);
-  ctx.fill();
+  if (pose === 'sit') {
+    // ===== 蹲坐姿态 =====
+    ctx.fillStyle = config.colors.cat;
 
-  // 头
-  ctx.beginPath();
-  ctx.arc(0, -size * 0.5, size * 0.4, 0, Math.PI * 2);
-  ctx.fill();
+    // 尾巴（在身体后面，带摆动）
+    ctx.strokeStyle = config.colors.cat;
+    ctx.lineWidth = size * 0.15;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const tailSwing = Math.sin(tailWag) * 0.2;
+    ctx.moveTo(size * 0.2, size * 0.1);
+    ctx.quadraticCurveTo(
+      size * 0.6 + tailSwing * size,
+      -size * 0.2,
+      size * 0.4 + tailSwing * size * 0.5,
+      -size * 0.6
+    );
+    ctx.stroke();
 
-  // 耳朵
-  ctx.beginPath();
-  ctx.moveTo(-size * 0.35, -size * 0.7);
-  ctx.lineTo(-size * 0.2, -size * 1.0);
-  ctx.lineTo(-size * 0.05, -size * 0.7);
-  ctx.fill();
+    // 后腿（蹲着的圆形）
+    ctx.fillStyle = config.colors.cat;
+    ctx.beginPath();
+    ctx.ellipse(size * 0.15, size * 0.2, size * 0.25, size * 0.18, 0.3, 0, Math.PI * 2);
+    ctx.fill();
 
-  ctx.beginPath();
-  ctx.moveTo(size * 0.35, -size * 0.7);
-  ctx.lineTo(size * 0.2, -size * 1.0);
-  ctx.lineTo(size * 0.05, -size * 0.7);
-  ctx.fill();
+    // 身体（椭圆，较圆润）
+    ctx.beginPath();
+    ctx.ellipse(0, -size * 0.05, size * 0.28, size * 0.35, 0, 0, Math.PI * 2);
+    ctx.fill();
 
-  // 眼睛
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(-size * 0.15, -size * 0.55, size * 0.1, 0, Math.PI * 2);
-  ctx.arc(size * 0.15, -size * 0.55, size * 0.1, 0, Math.PI * 2);
-  ctx.fill();
+    // 前腿
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.15, size * 0.25, size * 0.1, size * 0.15, -0.2, 0, Math.PI * 2);
+    ctx.fill();
 
-  // 瞳孔
-  ctx.fillStyle = '#000000';
-  ctx.beginPath();
-  ctx.arc(-size * 0.15, -size * 0.55, size * 0.05, 0, Math.PI * 2);
-  ctx.arc(size * 0.15, -size * 0.55, size * 0.05, 0, Math.PI * 2);
-  ctx.fill();
+    // 头
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.4, size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
 
-  // 鼻子
-  ctx.fillStyle = '#ff9999';
-  ctx.beginPath();
-  ctx.moveTo(0, -size * 0.4);
-  ctx.lineTo(-size * 0.06, -size * 0.32);
-  ctx.lineTo(size * 0.06, -size * 0.32);
-  ctx.fill();
+    // 耳朵
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.25, -size * 0.55);
+    ctx.lineTo(-size * 0.15, -size * 0.85);
+    ctx.lineTo(0, -size * 0.55);
+    ctx.fill();
 
-  // 尾巴
-  ctx.strokeStyle = config.colors.cat;
-  ctx.lineWidth = size * 0.15;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(size * 0.3, size * 0.4);
-  ctx.quadraticCurveTo(size * 0.8, size * 0.2, size * 0.6, -size * 0.2);
-  ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.25, -size * 0.55);
+    ctx.lineTo(size * 0.15, -size * 0.85);
+    ctx.lineTo(0, -size * 0.55);
+    ctx.fill();
+
+    // 眼睛
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(-size * 0.1, -size * 0.42, size * 0.07, 0, Math.PI * 2);
+    ctx.arc(size * 0.1, -size * 0.42, size * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(-size * 0.1, -size * 0.42, size * 0.035, 0, Math.PI * 2);
+    ctx.arc(size * 0.1, -size * 0.42, size * 0.035, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else if (pose === 'jump') {
+    // ===== 跳跃姿态 =====
+    // 根据跳跃进度调整姿态
+    const t = jumpProgress;
+
+    // 跳跃高度（抛物线）
+    const jumpHeight = Math.sin(t * Math.PI) * 20;
+    ctx.translate(0, -jumpHeight);
+
+    // 身体角度（跳跃时前倾）
+    let bodyAngle = 0;
+    if (t < 0.3) {
+      bodyAngle = -0.3 * (t / 0.3); // 起跳前倾
+    } else if (t < 0.7) {
+      bodyAngle = -0.3; // 空中保持
+    } else {
+      bodyAngle = -0.3 * (1 - (t - 0.7) / 0.3); // 落地恢复
+    }
+    ctx.rotate(bodyAngle);
+
+    ctx.fillStyle = config.colors.cat;
+
+    // 尾巴（跳跃时向后飘）
+    ctx.strokeStyle = config.colors.cat;
+    ctx.lineWidth = size * 0.12;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const tailPhase = t * Math.PI * 2;
+    ctx.moveTo(size * 0.35, size * 0.05);
+    ctx.quadraticCurveTo(
+      size * 0.7 + Math.sin(tailPhase) * size * 0.15,
+      size * 0.15 + Math.cos(tailPhase) * size * 0.1,
+      size * 0.55 + Math.sin(tailPhase + 1) * size * 0.1,
+      size * 0.4
+    );
+    ctx.stroke();
+
+    // 身体（横向拉伸）
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 0.4, size * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 后腿（伸展蹬地/收起）
+    ctx.save();
+    ctx.translate(size * 0.25, size * 0.1);
+    let backLegAngle = 0;
+    if (t < 0.2) {
+      backLegAngle = 0.8 - t * 4; // 蹬地
+    } else if (t < 0.7) {
+      backLegAngle = 0; // 收起
+    } else {
+      backLegAngle = (t - 0.7) * 2; // 准备落地
+    }
+    ctx.rotate(backLegAngle);
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.15, size * 0.08, size * 0.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(size * 0.03, size * 0.35, size * 0.06, size * 0.12, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 前腿（向前伸/收回）
+    ctx.save();
+    ctx.translate(-size * 0.25, size * 0.05);
+    let frontLegAngle = 0;
+    if (t < 0.3) {
+      frontLegAngle = -0.5 * (t / 0.3); // 向前伸
+    } else if (t < 0.7) {
+      frontLegAngle = -0.5 + (t - 0.3) * 0.5; // 保持/收回
+    } else {
+      frontLegAngle = -0.3 - (t - 0.7) * 1.5; // 落地伸出
+    }
+    ctx.rotate(frontLegAngle);
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.12, size * 0.07, size * 0.18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.02, size * 0.3, size * 0.05, size * 0.1, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 头
+    ctx.beginPath();
+    ctx.arc(-size * 0.2, -size * 0.15, size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 耳朵
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.35, -size * 0.3);
+    ctx.lineTo(-size * 0.3, -size * 0.55);
+    ctx.lineTo(-size * 0.15, -size * 0.3);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.05, -size * 0.3);
+    ctx.lineTo(-size * 0.1, -size * 0.55);
+    ctx.lineTo(-size * 0.2, -size * 0.3);
+    ctx.fill();
+
+    // 眼睛
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(-size * 0.27, -size * 0.18, size * 0.055, 0, Math.PI * 2);
+    ctx.arc(-size * 0.13, -size * 0.18, size * 0.055, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(-size * 0.27, -size * 0.18, size * 0.028, 0, Math.PI * 2);
+    ctx.arc(-size * 0.13, -size * 0.18, size * 0.028, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.restore();
 }
@@ -201,11 +331,11 @@ function draw() {
     }
   }
 
-  // 绘制小猫（带动画效果）
+  // 绘制小猫
   let catX = animation.catX;
   let catY = animation.catY;
-  let scale = 1;
-  let rotation = 0;
+  let pose = 'sit';
+  let jumpProgress = 0;
 
   // 跳跃动画
   if (animation.jumpPhase === 1) {
@@ -213,56 +343,62 @@ function draw() {
     // 从起点到终点的插值
     catX = animation.catX + (animation.targetX - animation.catX) * t;
     catY = animation.catY + (animation.targetY - animation.catY) * t;
-    // 抛物线跳跃高度
-    const jumpHeight = Math.sin(t * Math.PI) * 15;
-    catY -= jumpHeight;
-    // 跳跃时微微放大
-    scale = 1 + Math.sin(t * Math.PI) * 0.1;
+    pose = 'jump';
+    jumpProgress = t;
   }
 
-  // 逃跑动画
+  // 逃跑动画（连续跳跃）
   if (animation.escapePhase === 1) {
     const t = animation.escapeProgress;
+    const totalJumps = 4; // 总共跳4次
+    const currentJump = Math.floor(t * totalJumps);
+    const jumpT = (t * totalJumps) % 1; // 当前跳跃的进度
+
     let dx = 0, dy = 0;
+    const jumpDist = 40; // 每次跳跃距离
 
     switch (animation.escapeDirection) {
       case 'up':
-        dy = -150 * t;
+        dy = -jumpDist * (currentJump + jumpT);
         break;
       case 'down':
-        dy = 150 * t;
+        dy = jumpDist * (currentJump + jumpT);
         break;
       case 'left':
-        dx = -150 * t;
+        dx = -jumpDist * (currentJump + jumpT);
         break;
       case 'right':
-        dx = 150 * t;
+        dx = jumpDist * (currentJump + jumpT);
         break;
     }
 
-    // 跳跃式逃跑
-    const jumpOffset = Math.sin(t * Math.PI * 3) * 10 * (1 - t);
     catX += dx;
-    catY += dy - jumpOffset;
-    scale = 1 - t * 0.3; // 逐渐变小
+    catY += dy;
+    pose = 'jump';
+    jumpProgress = jumpT;
   }
 
-  // 被困动画
+  // 被困动画（原地挣扎）
   if (animation.trappedPhase === 1) {
-    rotation = Math.sin(animation.trappedProgress * Math.PI * 6) * 0.15;
+    // 小幅度摇晃
+    catX += Math.sin(animation.trappedProgress * Math.PI * 8) * 3;
   }
 
   // 只在未完全逃跑时绘制猫咪
-  if (animation.escapePhase !== 1 || animation.escapeProgress < 1) {
-    drawCat(catX, catY, scale, rotation);
+  if (animation.escapePhase !== 1 || animation.escapeProgress < 0.9) {
+    drawCat(catX, catY, pose, jumpProgress, animation.tailWag);
   }
 }
 
 // 动画循环
 function gameLoop() {
+  // 更新全局时间和尾巴摆动
+  animation.time += 0.016;
+  animation.tailWag = animation.time * 3; // 尾巴缓慢摆动
+
   // 更新跳跃动画
   if (animation.jumpPhase === 1) {
-    animation.jumpProgress += 0.08;
+    animation.jumpProgress += 0.06;
     if (animation.jumpProgress >= 1) {
       animation.jumpProgress = 1;
       animation.jumpPhase = 0;
@@ -280,7 +416,7 @@ function gameLoop() {
 
   // 更新逃跑动画
   if (animation.escapePhase === 1) {
-    animation.escapeProgress += 0.025;
+    animation.escapeProgress += 0.015;
     if (animation.escapeProgress >= 1) {
       animation.escapeProgress = 1;
       animation.escapePhase = 0;
@@ -291,7 +427,7 @@ function gameLoop() {
 
   // 更新被困动画
   if (animation.trappedPhase === 1) {
-    animation.trappedProgress += 0.05;
+    animation.trappedProgress += 0.03;
     if (animation.trappedProgress >= 1) {
       animation.trappedProgress = 0;
       animation.trappedPhase = 0;
