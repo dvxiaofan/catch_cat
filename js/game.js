@@ -464,6 +464,7 @@ function gameLoop() {
         startEscapeAnimation();
       } else {
         gameState.isMoving = false;
+        updateUndoButton(); // 跳跃结束（含撤销动画结束）后重新评估撤销按钮
       }
     }
   }
@@ -785,16 +786,17 @@ function undoMove() {
   gameState.blocks = prev.blocks;
   gameState.gameOver = prev.gameOver;
   gameState.result = prev.result;
-  // 重置动画状态
-  animation.jumpPhase = 0;
-  animation.jumpProgress = 0;
-  animation.escapePhase = 0;
-  animation.escapeProgress = 0;
-  animation.trappedPhase = 0;
-  animation.trappedProgress = 0;
   // 清除胜负消息
   messageEl.textContent = '';
   messageEl.className = 'message';
+  // 启动反向跳跃动画：从当前视觉位置动画回到 prev.cat 所在格子
+  // 不重置 jumpPhase，而是设成 1 让 gameLoop 自然播放，duration ≈ 0.28s
+  const targetCell = gameState.cells[gameState.cat.row][gameState.cat.col];
+  animation.targetX = targetCell.x;
+  animation.targetY = targetCell.y;
+  animation.jumpPhase = 1;
+  animation.jumpProgress = 0;
+  gameState.isMoving = true; // 阻止撤销期间新点击；gameLoop 跳完会自动设回 false
   updateUndoButton();
   playUndo();
 }
