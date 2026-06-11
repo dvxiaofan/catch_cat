@@ -34,6 +34,10 @@ const safeStorage = {
   }
 };
 
+// HUD 上次写入值，避免 60fps 无变化 DOM 写
+let lastDisplayedMove = -1;
+let lastDisplayedTimer = '';
+
 // 当前局已用时（秒）；未结束态从 startTime 推算
 const elapsedSeconds = () => (performance.now() - gameState.startTime) / 1000;
 
@@ -159,12 +163,19 @@ function formatTime(seconds) {
 }
 
 function updateHud() {
-  if (moveCountEl) moveCountEl.textContent = String(gameState.moveCount);
+  // 步数仅在变化时写入（仅下子/撤销才变）
+  if (moveCountEl && gameState.moveCount !== lastDisplayedMove) {
+    moveCountEl.textContent = String(gameState.moveCount);
+    lastDisplayedMove = gameState.moveCount;
+  }
+  // 计时按整秒刷新（formatTime 截到秒，秒数未变则不写）
   if (timerEl) {
-    const elapsed = gameState.finalTime > 0
-      ? gameState.finalTime
-      : (performance.now() - gameState.startTime) / 1000;
-    timerEl.textContent = formatTime(elapsed);
+    const elapsed = gameState.finalTime > 0 ? gameState.finalTime : elapsedSeconds();
+    const txt = formatTime(elapsed);
+    if (txt !== lastDisplayedTimer) {
+      timerEl.textContent = txt;
+      lastDisplayedTimer = txt;
+    }
   }
 }
 
