@@ -211,8 +211,18 @@ const animation = {
   time: 0 // 全局时间
 };
 
-// 初始化 Canvas 尺寸
+// 初始化 Canvas 尺寸（按可用空间自适应格子大小，桌面端上限保持原尺寸）
 function initCanvas() {
+  // 可用空间：宽度受窗口限制，高度要给标题/难度/HUD/按钮留出约 300px
+  const availW = Math.min(window.innerWidth - 24, 560);
+  const availH = window.innerHeight - 300;
+  // 反解格子半径：宽 = r * (2.25 * gridSize + 1)，高 = r * (2 * gridSize + 1)
+  // （cellGap 恒为 cellRadius 的 0.25 倍，与原桌面参数 20/5 一致）
+  const fitW = availW / (config.gridSize * 2.25 + 1);
+  const fitH = availH / (config.gridSize * 2 + 1);
+  config.cellRadius = Math.max(8, Math.min(20, Math.floor(Math.min(fitW, fitH))));
+  config.cellGap = Math.max(2, Math.round(config.cellRadius * 0.25));
+
   const totalWidth = config.gridSize * (config.cellRadius * 2 + config.cellGap) + config.cellRadius;
   const totalHeight = config.gridSize * (config.cellRadius * 1.75 + config.cellGap) + config.cellRadius;
 
@@ -879,6 +889,20 @@ canvas.addEventListener('pointerdown', handleClick);
 canvas.addEventListener('pointermove', handleMouseMove);
 canvas.addEventListener('pointerleave', handleMouseLeave);
 resetBtn.addEventListener('click', init);
+
+// 窗口尺寸变化时重算画布（仅响应宽度变化，避免移动端地址栏收起/展开误触发）
+let lastViewportWidth = window.innerWidth;
+window.addEventListener('resize', () => {
+  if (window.innerWidth === lastViewportWidth) return;
+  lastViewportWidth = window.innerWidth;
+  initCanvas();
+  // 把猫的视觉位置对齐到新坐标（动画中则直接落位）
+  const catCell = gameState.cells[gameState.cat.row][gameState.cat.col];
+  animation.catX = catCell.x;
+  animation.catY = catCell.y;
+  animation.targetX = catCell.x;
+  animation.targetY = catCell.y;
+});
 
 // ===== 音效系统（Web Audio API 合成，零文件） =====
 const SOUND_KEY = 'catch_cat_muted';

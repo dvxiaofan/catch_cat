@@ -359,3 +359,62 @@ header h1 {
 .play-again-btn:active {
   transform: scale(0.97);
 }
+
+/* ===== 移动端适配 ===== */
+@media (max-width: 520px) {
+  body {
+    overflow-y: auto;
+    align-items: flex-start;
+    padding: 56px 0 24px; /* 顶部给固定按钮留空间 */
+  }
+
+  .container {
+    padding: 0 12px;
+    width: 100%;
+  }
+
+  header h1 {
+    font-size: 64px;
+    margin-bottom: 6px;
+  }
+
+  .subtitle {
+    font-size: 15px;
+    margin-bottom: 6px;
+  }
+
+  .hint {
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+
+  .theme-toggle {
+    top: 10px;
+    right: 10px;
+  }
+
+  .sound-toggle {
+    top: 50px;
+    right: 10px;
+  }
+
+  .difficulty-btn {
+    padding: 8px 16px;
+    min-height: 36px;
+  }
+
+  .undo-btn,
+  .reset-btn {
+    min-height: 44px; /* 触控高度 */
+    padding: 11px 24px;
+    font-size: 15px;
+  }
+
+  .hud {
+    margin-bottom: 10px;
+  }
+
+  .message {
+    margin-top: 14px;
+  }
+}
