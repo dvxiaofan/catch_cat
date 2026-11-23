@@ -1,0 +1,14 @@
+# Cloudflare Wrangler 本地缓存（含 account_id，不可入库）
+.wrangler/
+
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 环境变量与密钥
+.env
+.env.local
+
+# 操作系统与日志
+.DS_Store
+*.log
